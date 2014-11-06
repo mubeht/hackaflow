@@ -23,6 +23,6 @@ public class ApprovalService extends Service<ServiceConfiguration> {
 
 	@Override
 	public void run(ServiceConfiguration configuration, Environment environment) throws Exception {
-		environment.addResource(new ApprovalResource());
+		environment.addResource(new ApprovalResource(configuration));
 	}
 }

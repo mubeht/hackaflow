@@ -18,13 +18,22 @@ import com.hightail.hackaflow.dto.ApprovalRequest;
 import com.hightail.hackaflow.dto.ApprovalResponse;
 import com.hightail.hackaflow.dto.ApproverInfo;
 
+
+import redis.clients.jedis.Jedis;
+
+
 @Path("/approval")
 @Produces("application/json")
 @Consumes("application/json")
 public class ApprovalResource {
-
-	public ApprovalResource() {
-		//
+    private final ServiceConfiguration configuration;
+	private final Jedis jedis;
+	
+	public ApprovalResource(ServiceConfiguration configuration) {
+		this.configuration = configuration;
+		this.jedis = new Jedis(configuration.getRedisHost(), configuration.getRedisPort());
+	    log("Connection to redis server %s:%s", configuration.getRedisHost(), configuration.getRedisPort());
+	    log("Server is running: %s", jedis.ping());
 	}
 
 	/**
