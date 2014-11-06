@@ -3,7 +3,6 @@ package com.hightail.hackaflow.approval;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -96,7 +95,6 @@ public class ApprovalResource {
 	@POST
 	@Path("/request/{id}")
 	public Response approve(@PathParam("id") String id, ApprovalResponse response) {
-		UUID responseId = UUID.randomUUID();
 		log("received approval for entity {}, request id {}, approver {}, approved {}, comment [{}]", response.getEntityId(), id, response.getApprover(), response.isApproved(), response.getComment() );
 		return Response.ok().build();
 	}
