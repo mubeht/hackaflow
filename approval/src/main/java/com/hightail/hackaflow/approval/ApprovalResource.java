@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import javax.ws.rs.Consumes;
@@ -14,26 +15,32 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Response;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import redis.clients.jedis.JedisPool;
+
 import com.hightail.hackaflow.dto.ApprovalRequest;
 import com.hightail.hackaflow.dto.ApprovalResponse;
 import com.hightail.hackaflow.dto.ApproverInfo;
-
-
-import redis.clients.jedis.Jedis;
 
 
 @Path("/approval")
 @Produces("application/json")
 @Consumes("application/json")
 public class ApprovalResource {
+    private final static Logger LOGGER = LoggerFactory.getLogger(ApprovalResource.class);
+    private static final String ENTITY_APPROVERS_ASSOCIATION = "ENTITY_APPROVERS_ASSOCIATION";
+
     private final ServiceConfiguration configuration;
-	private final Jedis jedis;
+	private final JedisDao jedisDao;
 	
 	public ApprovalResource(ServiceConfiguration configuration) {
 		this.configuration = configuration;
-		this.jedis = new Jedis(configuration.getRedisHost(), configuration.getRedisPort());
-	    log("Connection to redis server %s:%s", configuration.getRedisHost(), configuration.getRedisPort());
-	    log("Server is running: %s", jedis.ping());
+		JedisPool jedisPool = new JedisPool(configuration.getRedisHost(), configuration.getRedisPort());
+		this.jedisDao = new JedisDao(jedisPool); 
+	    log("Connection to redis server {}:{}", configuration.getRedisHost(), configuration.getRedisPort());
+	    log("Server is running: {}", jedisPool.getResource().ping());
 	}
 
 	/**
@@ -43,9 +50,9 @@ public class ApprovalResource {
 	 */
 	@POST
 	@Path("/entity")
-	public Response setApprovers(ApproverInfo approvers) {
-		
-		log("associating %s with %s", approvers.getEntityId(), Arrays.toString(approvers.getEmails().toArray()));
+	public Response saveApprovers(ApproverInfo approvers) {
+		jedisDao.save(ENTITY_APPROVERS_ASSOCIATION, approvers.getEntityId(), approvers.getEmails());        
+		log("associating {} with {}", approvers.getEntityId(), Arrays.toString(approvers.getEmails().toArray()));
 		URI uri;
 		try {
 			uri = new URI("/approval/entity/"+approvers.getEntityId());
@@ -63,8 +70,9 @@ public class ApprovalResource {
 	@GET
 	@Path("/entity/{id}")
 	public Response getApprovers(@PathParam("id") String id) {
-		ApproverInfo ai = new ApproverInfo(id, Collections.EMPTY_LIST);
-		log("retrieved approvers for entity %s", id, Arrays.toString(ai.getEmails().toArray()));
+		List approvers = jedisDao.get(ENTITY_APPROVERS_ASSOCIATION, id, List.class);
+		ApproverInfo ai = new ApproverInfo(id, approvers);
+		log("retrieved approvers for entity {}", id, Arrays.toString(ai.getEmails().toArray()));
 		return Response.ok(ai).build();
 	}
 	
@@ -81,7 +89,7 @@ public class ApprovalResource {
 		} catch (URISyntaxException e) {
 			throw new RuntimeException(e);
 		}
-		log("submitted approval request for entity %s: proposal [%s]", request.getEntityId(), request.getProposal());
+		log("submitted approval request for entity {}: proposal [{}]", request.getEntityId(), request.getProposal());
 		return Response.ok().contentLocation(uri).build();
 	}
 
@@ -89,27 +97,17 @@ public class ApprovalResource {
 	@Path("/request/{id}")
 	public Response approve(@PathParam("id") String id, ApprovalResponse response) {
 		UUID responseId = UUID.randomUUID();
-		URI uri;
-		try {
-			uri = new URI("/request/"+ id + "/" + responseId);
-		} catch (URISyntaxException e) {
-			throw new RuntimeException(e);
-		}
-		log("received approval for entity %s, request id %s, approver %s, approved %s, comment [%s]", response.getEntityId(), id, response.getApprover(), response.isApproved(), response.getComment() );
+		log("received approval for entity {}, request id {}, approver {}, approved {}, comment [{}]", response.getEntityId(), id, response.getApprover(), response.isApproved(), response.getComment() );
 		return Response.ok().build();
 	}
 
 	@GET
 	@Path("request/{id}")
 	public Response status(@PathParam("id") String id) {
-		return Response.ok(String.format("approval status for %s: pending!", id)).build();
-	}
-
-	private void log(Object obj) {
-		System.out.println(obj);
+		return Response.ok(String.format("approval status for {}: pending!", id)).build();
 	}
 
 	private void log(String format, Object... args) {
-		System.out.println(String.format(format, args));
+		LOGGER.info(format, args);
 	}
 }
